@@ -1,78 +1,83 @@
-from flask import Flask, render_template, request, url_for, redirect, flash
-from flask_mysqldb import MySQL 
+from flask import Flask, jsonify, request, flash
+from flask_mysqldb import MySQL
 
 app = Flask(__name__)
 
-#conexxion de mysql
+# Configuración de MySQL
 app.config['MYSQL_HOST'] = 'localhost'
-app.config['MYSQL_USER'] = 'root'  # Corrige el nombre de la clave a 'MYSQL_USER'
+app.config['MYSQL_USER'] = 'root'
 app.config['MYSQL_PASSWORD'] = 'hahahahaha'
 app.config['MYSQL_DB'] = 'usuariosflask'
 mysql = MySQL(app)
 
-#configuracion de sesion
+# Configuración de la clave secreta para sesiones
 app.secret_key = 'mysecretkey'
 
-@app.route('/') 
-def Index():
+# Ruta principal
+@app.route('/')
+def index():
+    return 'Hola Mundo'
+
+# Ruta para obtener todos los usuarios
+@app.route('/usuarios', methods=['GET'])
+def get_users():
     cur = mysql.connection.cursor()
     cur.execute('SELECT * FROM usuarios')
     data = cur.fetchall()
-    print(data)
-    return render_template('index.html', usuarios = data)
+    usuarios = []
+    for usuario in data:
+        usuarios.append({
+            'id': usuario[0],
+            'nombre': usuario[1],
+            'telefono': usuario[2],
+            'email': usuario[3]
+        })
+    return jsonify(usuarios)
 
-
-@app.route('/add_user', methods=['POST'])
+# Ruta para agregar un nuevo usuario
+@app.route('/usuario', methods=['POST'])
 def add_user():
-    if request.method == 'POST':
-        nombre = request.form['nombre']
-        telefono = request.form['telefono']
-        email = request.form['email']
-        print(nombre)
-        print(telefono)
-        print(email)
-        cur = mysql.connection.cursor()
-        cur.execute('INSERT INTO usuarios (nombre, telefono, email) VALUES (%s, %s, %s)', (nombre, telefono, email))
-        mysql.connection.commit()
-        flash('Usuario agregado satisfactoriamente')
-        return redirect(url_for('Index'))
+    nombre = request.json['nombre']
+    telefono = request.json['telefono']
+    email = request.json['email']
+    cur = mysql.connection.cursor()
+    cur.execute('INSERT INTO usuarios (nombre, telefono, email) VALUES (%s, %s, %s)', (nombre, telefono, email))
+    mysql.connection.commit()
+    return jsonify({'message': 'Usuario agregado satisfactoriamente'})
 
-@app.route('/edit/<id>')
-def get_contact(id):
-    cur =mysql.connection.cursor()
-    cur.execute('SELECT * FROM usuarios WHERE id = %s', (id))
-    data = cur.fetchall()
-    return render_template('edit-user.html', usuario = data[0])
+# Ruta para obtener un usuario específico por ID
+@app.route('/usuario/<id>', methods=['GET'])
+def get_user(id):
+    cur = mysql.connection.cursor()
+    cur.execute('SELECT * FROM usuarios WHERE id = %s', (id,))
+    data = cur.fetchone()
+    if data:
+        usuario = {'id': data[0], 'nombre': data[1], 'telefono': data[2], 'email': data[3]}
+        return jsonify(usuario)
+    return jsonify({'message': 'Usuario no encontrado'})
 
-@app.route('/update/<id>',methods = ['POST'])
-def update_contact(id):
-    if request.method == 'POST':
-        nombre = request.form['nombre']
-        telefono = request.form['telefono']
-        email = request.form['email']
-        cur = mysql.connection.cursor()
-        cur.execute("""
-            UPDATE usuarios
-            SET nombre = %s,
-                telefono = %s,
-                email = %s
-            WHERE id = %s
-        """, (nombre, telefono, email, id))
-        mysql.connection.commit()
-        flash('Usuario actualizado satisfactoriamente')
-        return redirect(url_for('Index'))
+# Ruta para actualizar un usuario
+@app.route('/usuario/<id>', methods=['PUT'])
+def update_user(id):
+    nombre = request.json['nombre']
+    telefono = request.json['telefono']
+    email = request.json['email']
+    cur = mysql.connection.cursor()
+    cur.execute("""
+        UPDATE usuarios
+        SET nombre = %s, telefono = %s, email = %s
+        WHERE id = %s
+    """, (nombre, telefono, email, id))
+    mysql.connection.commit()
+    return jsonify({'message': 'Usuario actualizado satisfactoriamente'})
 
-            
-
-
-@app.route('/delete/<string:id>')
+# Ruta para eliminar un usuario
+@app.route('/usuario/<id>', methods=['DELETE'])
 def delete_user(id):
     cur = mysql.connection.cursor()
-    cur.execute('DELETE FROM usuarios WHERE id = {0}'.format(id))
+    cur.execute('DELETE FROM usuarios WHERE id = %s', (id,))
     mysql.connection.commit()
-    flash('Usuario eliminado satisfactoriamente')
-    return redirect(url_for('Index'))
-
+    return jsonify({'message': 'Usuario eliminado satisfactoriamente'})
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
